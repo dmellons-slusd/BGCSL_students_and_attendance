@@ -1,14 +1,16 @@
+import datetime
 from pandas import DataFrame, Series, concat, notna, read_sql_query, read_csv, to_datetime, to_numeric
 from sqlalchemy import create_engine, text
 from slusdlib import aeries, core
 from thefuzz import fuzz, process
 import chardet
+from decouple import config
 
 
 sql = core.build_sql_object()
-cnxn = aeries.get_aeries_cnxn()
+cnxn = aeries.get_aeries_cnxn() if config('TEST_RUN', default=True, cast=bool) else aeries.get_aeries_cnxn(database=config('TEST_DATABASE'))
 grade_map = {
-    '8': 8,
+        '8': 8,
         '3': 3,
         '2': 2,
         '4': 4,
@@ -19,7 +21,7 @@ grade_map = {
         '9': 9,
         '00JK': -1,
         '0K': 0
-    }
+        }
 def match_students() -> DataFrame:
     query = text(sql.all_students)
     df_stu_data = read_sql_query(query, cnxn)
@@ -44,9 +46,7 @@ def match_students() -> DataFrame:
 
     # Load the grade mapping file and apply it
 
-    grade_map_dict = Series(grade_map.Lookup.values, index=grade_map.Grade).to_dict()
-    print(grade_map_dict)
-    df_stusheet['GR'] = df_stusheet['Grade'].map(grade_map_dict)
+    df_stusheet['GR'] = df_stusheet['Grade'].map(grade_map)
     df_stusheet['GR'] = df_stusheet['GR'].astype('Int64')
 
     print("Data loaded and prepared successfully.")
@@ -123,15 +123,40 @@ def match_students() -> DataFrame:
         'GR_y': 'db_GR'
     }, inplace=True)
     return final_df
-def add_program(ids: list[int]) -> None:
-    pass
+
+def get_next_pgm_sq(id, aeries_cnxn) -> int:
+
+    data = read_sql_query(text(sql.last_pgm_sq), aeries_cnxn,params={"id":id})
+    if data.empty:
+        core.log(f'No previous request data found for student, returning 1 - {sql}')
+        return 1
+    else:
+        return data['sq'][0]+1
+    
+def add_program(data:DataFrame, pgm_code:int = 149) -> None:
+    for _,row in data.iterrows():
+        id = row['ID']
+        next_sq = get_next_pgm_sq(id, cnxn)
+        start_date = to_datetime(row['Enrollment Start Date'])
+        print('start_date:', start_date, type(start_date))
+        with cnxn.connect() as conn:
+            conn.execute(text(sql.insert_pgm),parameters={
+                "id": id,
+                "sq": next_sq,
+                "pgm_code":pgm_code,
+                "start_date": start_date
+            })
+            conn.commit()
+        print(id, next_sq)
 
 def main():
+    if not config('TEST_RUN', default=True, cast=bool):
+        input("Running in production mode. Press Enter to continue...")
     matched_students = match_students()
     print(matched_students.head())
-    ids = matched_students['ID'].dropna().unique().tolist()
-    print(f"Matched {len(ids)} unique student IDs.")
-    add_program(ids)
+
+    print(f"Matched {len(matched_students['ID'].dropna().unique().tolist())} unique student IDs.")
+    add_program(matched_students)
     
 
 if __name__ == "__main__":
