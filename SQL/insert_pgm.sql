@@ -2,6 +2,7 @@ INSERT INTO PGM (
     PID
     ,CD
     ,ESD
+    ,PSD
     ,YP
     ,HR
     ,sq
@@ -11,9 +12,10 @@ INSERT INTO PGM (
     :id
     ,:pgm_code
     ,:start_date
+    ,:pgm_start_date
     ,0
     ,0
     ,:sq
     ,0
-    ,NOW()
+    ,GETDATE()
     )

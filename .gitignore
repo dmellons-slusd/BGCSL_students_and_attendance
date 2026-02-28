@@ -3,3 +3,4 @@
 *.xlsx
 *.ipynb
 *.log
+out/*.txt
