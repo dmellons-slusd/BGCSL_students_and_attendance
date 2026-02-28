@@ -1,3 +1,4 @@
+import argparse
 import datetime
 from pathlib import Path
 from pandas import DataFrame, Series, concat, notna, read_sql_query, read_csv, to_datetime, to_numeric
@@ -284,8 +285,16 @@ def test(data:DataFrame ) -> None:
         id = int(row['ID']) if notna(row['ID']) else None
         print(id)
         
+def parse_args():
+    parser = argparse.ArgumentParser(description="Match enrollment CSVs to student database records.")
+    parser.add_argument('-A', '--automation', action='store_true',
+                        help='run in automation mode; skip interactive prompts (for scheduled tasks)')
+    return parser.parse_args()
+
+
 def main():
-    if not config('TEST_RUN', default=True, cast=bool):
+    args = parse_args()
+    if not config('TEST_RUN', default=True, cast=bool) and not args.automation:
         input("Running in production mode. Press Enter to continue...")
 
     # Process all enrollment files in the configured input folder
